@@ -5,10 +5,11 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
+    "postinstall": "npm --prefix client install",
+    "build": "npm --prefix client install && npm --prefix client run build",
     "dev:server": "node server/index.js",
     "dev:client": "npm run dev --prefix client",
-    "dev": "concurrently \"node server/index.js\" \"npm run dev --prefix client\"",
-    "build": "npm run build --prefix client"
+    "dev": "concurrently \"node server/index.js\" \"npm run dev --prefix client\""
   },
   "keywords": ["ecommerce", "gift-box", "telegram-order", "uzbekistan"],
   "author": "sharbox.uz",
