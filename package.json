@@ -1,0 +1,25 @@
+{
+  "name": "sharbox-uz",
+  "version": "1.0.0",
+  "description": "sharbox.uz - Qo'l mehnati sovg'a bokslari va sharlar internet do'koni",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev:server": "node server/index.js",
+    "dev:client": "npm run dev --prefix client",
+    "dev": "concurrently \"node server/index.js\" \"npm run dev --prefix client\"",
+    "build": "npm run build --prefix client"
+  },
+  "keywords": ["ecommerce", "gift-box", "telegram-order", "uzbekistan"],
+  "author": "sharbox.uz",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.3.0",
+    "multer": "^2.4.0"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  }
+}
