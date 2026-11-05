@@ -3,7 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
-const { readDb, writeDb } = require('./db');
+const { readDb, writeDb, archiveOrder } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -57,21 +57,45 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
 // Settings
 app.get('/api/settings', (req, res) => {
   const db = readDb();
-  // Don't leak admin pin to public
   const { adminPin, ...publicSettings } = db.settings;
   res.json(publicSettings);
 });
 
 app.put('/api/settings', (req, res) => {
   const { adminPin, settings } = req.body;
+  const headerPin = req.headers['x-admin-pin'];
+  const pinToCheck = adminPin || headerPin;
+
   const db = readDb();
-  if (adminPin !== db.settings.adminPin) {
-    return res.status(403).json({ error: "Noto'g'ri admin paroli" });
+  if (!pinToCheck || pinToCheck !== db.settings.adminPin) {
+    return res.status(403).json({ error: "Noto'g'ri admin paroli! Iltimos, parolingizni tekshiring." });
   }
-  db.settings = { ...db.settings, ...settings };
+
+  if (settings) {
+    // Sanitize telegramManager and instagram
+    if (settings.telegramManager !== undefined) {
+      settings.telegramManager = String(settings.telegramManager).replace(/^@+/, '').trim();
+    }
+    if (settings.instagram !== undefined) {
+      settings.instagram = String(settings.instagram).replace(/^@+/, '').trim();
+    }
+    if (settings.phone !== undefined) {
+      settings.phone = String(settings.phone).trim();
+    }
+
+    // Change PIN if provided
+    if (settings.newPin && String(settings.newPin).trim()) {
+      db.settings.adminPin = String(settings.newPin).trim();
+      delete settings.newPin;
+    }
+
+    delete settings.adminPin; // don't overwrite blindly
+    db.settings = { ...db.settings, ...settings };
+  }
+
   writeDb(db);
   const { adminPin: _, ...safeSettings } = db.settings;
-  res.json({ success: true, settings: safeSettings });
+  res.json({ success: true, settings: safeSettings, currentPin: db.settings.adminPin });
 });
 
 // Admin Auth
@@ -79,7 +103,7 @@ app.post('/api/auth/login', (req, res) => {
   const { pin } = req.body;
   const db = readDb();
   if (pin && pin === db.settings.adminPin) {
-    res.json({ success: true, message: 'Kirish muvaffaqiyatli' });
+    res.json({ success: true, message: 'Kirish muvaffaqiyatli', adminPin: db.settings.adminPin });
   } else {
     res.status(401).json({ success: false, error: "Parol noto'g'ri! Qaytadan urinib ko'ring." });
   }
@@ -122,12 +146,6 @@ app.put('/api/banners', (req, res) => {
   db.banners = banners;
   writeDb(db);
   res.json({ success: true, banners });
-});
-
-// Extras
-app.get('/api/extras', (req, res) => {
-  const db = readDb();
-  res.json(db.extras || []);
 });
 
 // Products
@@ -218,6 +236,92 @@ app.delete('/api/products/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// Analytics Dashboard endpoint
+app.get('/api/analytics', (req, res) => {
+  const db = readDb();
+  const orders = db.orders || [];
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const sevenDaysAgo = now.getTime() - (7 * 24 * 60 * 60 * 1000);
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+  let todayOrders = 0;
+  let todayRevenue = 0;
+  let weekOrders = 0;
+  let weekRevenue = 0;
+  let monthOrders = 0;
+  let monthRevenue = 0;
+  let totalRevenue = 0;
+
+  const statusBreakdown = {
+    'Yangi': { count: 0, revenue: 0 },
+    'Zaklad kutilmoqda': { count: 0, revenue: 0 },
+    'Yetkazilmoqda': { count: 0, revenue: 0 },
+    'Yakunlandi': { count: 0, revenue: 0 },
+    'Bekor qilindi': { count: 0, revenue: 0 }
+  };
+
+  const productStats = {};
+
+  orders.forEach(order => {
+    const orderTime = new Date(order.createdAt || 0).getTime();
+    const amount = Number(order.totalAmount) || 0;
+    const status = order.status || 'Yangi';
+
+    totalRevenue += amount;
+
+    if (orderTime >= startOfToday) {
+      todayOrders += 1;
+      todayRevenue += amount;
+    }
+    if (orderTime >= sevenDaysAgo) {
+      weekOrders += 1;
+      weekRevenue += amount;
+    }
+    if (orderTime >= startOfMonth) {
+      monthOrders += 1;
+      monthRevenue += amount;
+    }
+
+    if (!statusBreakdown[status]) {
+      statusBreakdown[status] = { count: 0, revenue: 0 };
+    }
+    statusBreakdown[status].count += 1;
+    statusBreakdown[status].revenue += amount;
+
+    // Item stats
+    if (Array.isArray(order.items)) {
+      order.items.forEach(item => {
+        const key = item.name || 'Mahsulot';
+        if (!productStats[key]) {
+          productStats[key] = { name: key, quantity: 0, revenue: 0 };
+        }
+        productStats[key].quantity += (Number(item.quantity) || 1);
+        productStats[key].revenue += ((Number(item.price) || 0) * (Number(item.quantity) || 1));
+      });
+    }
+  });
+
+  const topProducts = Object.values(productStats)
+    .sort((a, b) => b.quantity - a.quantity)
+    .slice(0, 5);
+
+  const averageOrderValue = orders.length > 0 ? Math.round(totalRevenue / orders.length) : 0;
+
+  res.json({
+    summary: {
+      today: { orders: todayOrders, revenue: todayRevenue },
+      week: { orders: weekOrders, revenue: weekRevenue },
+      month: { orders: monthOrders, revenue: monthRevenue },
+      allTime: { orders: orders.length, revenue: totalRevenue, averageOrderValue }
+    },
+    statusBreakdown,
+    topProducts,
+    recentOrders: orders.slice(0, 10)
+  });
+});
+
 // Orders
 app.get('/api/orders', (req, res) => {
   const db = readDb();
@@ -226,7 +330,7 @@ app.get('/api/orders', (req, res) => {
 
 app.post('/api/orders', async (req, res) => {
   const db = readDb();
-  const { customer, items, extras, note, totalAmount } = req.body;
+  const { customer, items, note, totalAmount } = req.body;
 
   if (!customer || !customer.phone || !items || !items.length) {
     return res.status(400).json({ error: 'Mijoz ma\'lumotlari va mahsulotlar to\'liq emas' });
@@ -237,7 +341,6 @@ app.post('/api/orders', async (req, res) => {
     id: orderId,
     customer,
     items,
-    extras: extras || [],
     note: note || '',
     totalAmount: Number(totalAmount) || 0,
     status: 'Yangi', // Yangi | Zaklad kutilmoqda | Yetkazilmoqda | Yakunlandi | Bekor qilindi
@@ -246,12 +349,17 @@ app.post('/api/orders', async (req, res) => {
 
   if (!db.orders) db.orders = [];
   db.orders.unshift(newOrder);
+
+  // 1. Write to database with atomic flush
   writeDb(db);
 
-  // Construct structured Telegram message
+  // 2. Write to immutable append-only archive log
+  archiveOrder(newOrder);
+
+  // 3. Construct clean and structured Telegram message
   let tgMessage = `📦 YANGI BUYURTMA #${orderId} | sharbox.uz\n`;
   tgMessage += `━━━━━━━━━━━━━━━━━━━━━\n`;
-  tgMessage += `👤 Mijoz: ${customer.name || "Noma'lum"}\n`;
+  tgMessage += `👤 Mijoz: ${customer.name || "Hurmatli mijoz"}\n`;
   tgMessage += `📞 Telefon: ${customer.phone}\n`;
   if (customer.address) {
     tgMessage += `📍 Manzil: ${customer.address}\n`;
@@ -260,7 +368,7 @@ app.post('/api/orders', async (req, res) => {
     tgMessage += `📅 Yetkazish vaqti: ${customer.deliveryDate}\n`;
   }
   tgMessage += `━━━━━━━━━━━━━━━━━━━━━\n`;
-  tgMessage += `🛍️ MAHSULOTLAR:\n`;
+  tgMessage += `🛍️ BUYURTMA QILINGAN TO'PLAMLAR:\n`;
 
   items.forEach((item, idx) => {
     tgMessage += `${idx + 1}. ${item.name} (${item.quantity} dona) - ${(item.price * item.quantity).toLocaleString('uz-UZ')} so'm\n`;
@@ -269,18 +377,8 @@ app.post('/api/orders', async (req, res) => {
     }
   });
 
-  if (extras && extras.length) {
-    tgMessage += `\n🎁 QO'SHIMCHA ISTAKLAR:\n`;
-    extras.forEach(ex => {
-      tgMessage += `➕ ${ex.name}${ex.price ? ` (+${Number(ex.price).toLocaleString('uz-UZ')} so'm)` : ''}\n`;
-      if (ex.userText) {
-        tgMessage += `   💬 Matn: "${ex.userText}"\n`;
-      }
-    });
-  }
-
   if (note) {
-    tgMessage += `\n📝 Izoh / Istak: ${note}\n`;
+    tgMessage += `\n📝 Mijoz istagi / Izoh: ${note}\n`;
   }
 
   tgMessage += `━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -288,7 +386,7 @@ app.post('/api/orders', async (req, res) => {
   tgMessage += `━━━━━━━━━━━━━━━━━━━━━\n`;
   tgMessage += `Assalomu alaykum! Ushbu buyurtmani rasmiylashtirmoqchiman. Zaklad to'lovi va yetkazib berish bo'yicha ma'lumot bersangiz!`;
 
-  const manager = db.settings.telegramManager ? db.settings.telegramManager.replace('@', '') : 'sharbox_manager';
+  const manager = db.settings.telegramManager ? db.settings.telegramManager.replace(/^@+/, '').trim() : 'sharbox_manager';
   const telegramUrl = `https://t.me/${manager}?text=${encodeURIComponent(tgMessage)}`;
 
   // Optional Telegram Bot notification push if bot token & chat id exist
@@ -302,9 +400,7 @@ app.post('/api/orders', async (req, res) => {
           text: tgMessage
         })
       }).catch(e => console.error('Bot notify error:', e.message));
-    } catch (e) {
-      // ignore bot push fail
-    }
+    } catch (e) {}
   }
 
   res.status(201).json({
@@ -321,6 +417,7 @@ app.put('/api/orders/:id/status', (req, res) => {
   const order = db.orders.find(o => o.id === req.params.id);
   if (!order) return res.status(404).json({ error: 'Buyurtma topilmadi' });
   order.status = status;
+  order.updatedAt = new Date().toISOString();
   writeDb(db);
   res.json({ success: true, order });
 });

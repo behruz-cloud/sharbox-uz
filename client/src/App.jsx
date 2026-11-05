@@ -17,15 +17,13 @@ export default function App() {
   const [categories, setCategories] = useState([]);
   const [banners, setBanners] = useState([]);
   const [settings, setSettings] = useState(null);
-  const [extras, setExtras] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Dark mode state
+  // Dark mode state: Default ALWAYS LIGHT MODE unless user explicitly saved 'dark'
   const [darkMode, setDarkMode] = useState(() => {
     try {
       const saved = localStorage.getItem('sharbox_theme');
-      if (saved) return saved === 'dark';
-      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      return saved === 'dark';
     } catch {
       return false;
     }
@@ -74,8 +72,10 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false);
+  
+  // Admin panel open state (via secret URL /admin or #admin)
   const [isAdminOpen, setIsAdminOpen] = useState(() => {
-    return window.location.hash === '#admin';
+    return window.location.hash === '#admin' || window.location.pathname === '/admin';
   });
 
   // Save Cart & Favs to localStorage
@@ -87,33 +87,46 @@ export default function App() {
     localStorage.setItem('sharbox_favs', JSON.stringify(favorites));
   }, [favorites]);
 
-  // Listen to hash changes for #admin
+  // Listen to secret triggers: #admin, /admin, and Ctrl+Shift+A
   useEffect(() => {
-    const handleHashChange = () => {
-      if (window.location.hash === '#admin') {
+    const handleLocationChange = () => {
+      if (window.location.hash === '#admin' || window.location.pathname === '/admin') {
         setIsAdminOpen(true);
       }
     };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
+        e.preventDefault();
+        setIsAdminOpen(prev => !prev);
+      }
+    };
+
+    window.addEventListener('hashchange', handleLocationChange);
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('hashchange', handleLocationChange);
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   // Fetch initial data
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [prods, cats, bans, sets, ext] = await Promise.all([
+      const [prods, cats, bans, sets] = await Promise.all([
         api.getProducts(),
         api.getCategories(),
         api.getBanners(),
-        api.getSettings(),
-        api.getExtras()
+        api.getSettings()
       ]);
       setProducts(prods || []);
       setCategories(cats || []);
       setBanners(bans || []);
       setSettings(sets || null);
-      setExtras(ext || []);
     } catch (err) {
       console.error('Failed to load initial data:', err);
     } finally {
@@ -203,7 +216,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans selection:bg-rose-500 selection:text-white transition-colors duration-200">
       
-      {/* 1. Header (Logo, search, favorites, cart, admin, dark mode toggle) */}
+      {/* 1. Header (Logo, search, favorites, cart, dark mode toggle - NO visible admin button) */}
       <Header
         cartCount={totalCartCount}
         favoritesCount={favorites.length}
@@ -239,7 +252,7 @@ export default function App() {
           counts={categoryCounts}
         />
 
-        {/* 4. Products Grid matching wireframe layout */}
+        {/* 4. Products Grid matching wireframe layout with swipeable images */}
         <section className="max-w-6xl mx-auto px-4 pt-6 sm:pt-8">
           
           {loading ? (
@@ -259,7 +272,7 @@ export default function App() {
                   setActiveCategory('all');
                   setSearchTerm('');
                 }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-bold text-xs hover:bg-rose-100 dark:hover:bg-rose-900/40 transition"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-bold text-xs hover:bg-rose-100 dark:hover:bg-rose-900/40 transition cursor-pointer"
               >
                 Barchasini ko'rsatish
               </button>
@@ -287,7 +300,7 @@ export default function App() {
         </section>
       </main>
 
-      {/* 5. Footer */}
+      {/* 5. Footer (clean, no public admin button) */}
       <Footer
         settings={settings}
         onOpenAdmin={() => setIsAdminOpen(true)}
@@ -317,7 +330,7 @@ export default function App() {
         settings={settings}
       />
 
-      {/* Cart Drawer & Telegram Checkout */}
+      {/* Cart Drawer & Telegram Checkout (Clean without extras) */}
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
@@ -326,7 +339,6 @@ export default function App() {
         onRemoveItem={handleRemoveFromCart}
         onClearCart={handleClearCart}
         settings={settings}
-        extrasList={extras}
       />
 
       {/* Favorites Modal */}
@@ -339,13 +351,16 @@ export default function App() {
         onOpenDetails={(p) => setSelectedProduct(p)}
       />
 
-      {/* Separate Admin Panel */}
+      {/* Separate Admin Panel (Accessed secretly via /admin or #admin) */}
       <AdminPanel
         isOpen={isAdminOpen}
         onClose={() => {
           setIsAdminOpen(false);
           if (window.location.hash === '#admin') {
-            history.pushState(null, '', ' ');
+            history.pushState(null, '', window.location.pathname);
+          }
+          if (window.location.pathname === '/admin') {
+            history.pushState(null, '', '/');
           }
         }}
         onRefreshData={fetchData}

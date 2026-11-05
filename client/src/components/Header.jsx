@@ -1,5 +1,5 @@
-import React from 'react';
-import { ShoppingBag, Heart, Search, ShieldCheck, Send, Gift, X, Moon, Sun } from 'lucide-react';
+import React, { useState } from 'react';
+import { ShoppingBag, Heart, Search, Send, Gift, X, Moon, Sun } from 'lucide-react';
 
 const InstagramIcon = ({ className = "w-4 h-4" }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -22,6 +22,18 @@ export default function Header({
   onToggleDarkMode,
   searchInputRef
 }) {
+  const [logoClicks, setLogoClicks] = useState(0);
+
+  const handleLogoClick = () => {
+    const next = logoClicks + 1;
+    setLogoClicks(next);
+    if (next >= 4) {
+      setLogoClicks(0);
+      if (onOpenAdmin) onOpenAdmin();
+    }
+    setTimeout(() => setLogoClicks(0), 1200);
+  };
+
   return (
     <header className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-rose-100 dark:border-slate-800 shadow-xs transition-colors duration-200">
       {/* Top announcement bar */}
@@ -34,18 +46,18 @@ export default function Header({
           <div className="hidden sm:flex items-center gap-4 text-xs font-semibold shrink-0">
             {settings?.instagram && (
               <a
-                href={`https://instagram.com/${settings.instagram.replace('@', '')}`}
+                href={`https://instagram.com/${settings.instagram.replace(/^@+/, '')}`}
                 target="_blank"
                 rel="noreferrer"
                 className="hover:underline flex items-center gap-1 transition opacity-90 hover:opacity-100"
               >
                 <InstagramIcon className="w-3.5 h-3.5" />
-                <span>@{settings.instagram.replace('@', '')}</span>
+                <span>@{settings.instagram.replace(/^@+/, '')}</span>
               </a>
             )}
             {settings?.telegramManager && (
               <a
-                href={`https://t.me/${settings.telegramManager.replace('@', '')}`}
+                href={`https://t.me/${settings.telegramManager.replace(/^@+/, '')}`}
                 target="_blank"
                 rel="noreferrer"
                 className="hover:underline flex items-center gap-1 transition opacity-90 hover:opacity-100"
@@ -62,10 +74,10 @@ export default function Header({
       <div className="max-w-6xl mx-auto px-4 py-3 sm:py-3.5">
         <div className="flex items-center justify-between gap-2 sm:gap-4">
           
-          {/* Logo & Brand */}
+          {/* Logo & Brand (Secret 4-tap trigger for owner admin access) */}
           <div
             className="flex items-center gap-2.5 cursor-pointer select-none"
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            onClick={handleLogoClick}
           >
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-rose-500 to-pink-500 flex items-center justify-center text-white shadow-md shadow-rose-200 dark:shadow-rose-950/50">
               <Gift className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -105,7 +117,7 @@ export default function Header({
           </div>
 
           {/* Action icons */}
-          <div className="flex items-center gap-1 sm:gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             
             {/* Desktop Dark/Light Mode toggle */}
             <button
@@ -154,16 +166,6 @@ export default function Header({
               <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider">
                 Savat
               </span>
-            </button>
-
-            {/* Admin entry button */}
-            <button
-              onClick={onOpenAdmin}
-              aria-label="Admin panel"
-              className="p-2 sm:p-2.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition"
-              title="Admin sahifa"
-            >
-              <ShieldCheck className="w-5 h-5 sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>

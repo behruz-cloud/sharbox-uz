@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Heart, ShoppingBag, Check, ChevronLeft, ChevronRight, PackageCheck } from 'lucide-react';
 
 export default function ProductCard({
@@ -11,6 +11,9 @@ export default function ProductCard({
 }) {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isAddedAnim, setIsAddedAnim] = useState(false);
+  const scrollRef = useRef(null);
+  const dragDistance = useRef(0);
+  const touchStartX = useRef(0);
 
   const images = product.images && product.images.length > 0
     ? product.images
@@ -20,19 +23,39 @@ export default function ProductCard({
     ? Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)
     : null;
 
+  // Track active image on scroll
+  const handleScroll = () => {
+    if (!scrollRef.current) return;
+    const { scrollLeft, clientWidth } = scrollRef.current;
+    if (clientWidth > 0) {
+      const idx = Math.round(scrollLeft / clientWidth);
+      if (idx !== activeImageIndex && idx >= 0 && idx < images.length) {
+        setActiveImageIndex(idx);
+      }
+    }
+  };
+
+  const scrollToImage = (e, index) => {
+    e.stopPropagation();
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        left: index * scrollRef.current.clientWidth,
+        behavior: 'smooth'
+      });
+      setActiveImageIndex(index);
+    }
+  };
+
   const handleNextImage = (e) => {
     e.stopPropagation();
-    setActiveImageIndex((prev) => (prev + 1) % images.length);
+    const next = (activeImageIndex + 1) % images.length;
+    scrollToImage(e, next);
   };
 
   const handlePrevImage = (e) => {
     e.stopPropagation();
-    setActiveImageIndex((prev) => (prev - 1 + images.length) % images.length);
-  };
-
-  const handleDotClick = (e, index) => {
-    e.stopPropagation();
-    setActiveImageIndex(index);
+    const prev = (activeImageIndex - 1 + images.length) % images.length;
+    scrollToImage(e, prev);
   };
 
   const handleAddToCart = (e) => {
@@ -42,25 +65,59 @@ export default function ProductCard({
     setTimeout(() => setIsAddedAnim(false), 900);
   };
 
+  const handleTouchStart = (e) => {
+    dragDistance.current = 0;
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e) => {
+    dragDistance.current = Math.abs(e.touches[0].clientX - touchStartX.current);
+  };
+
+  const handleCardClick = () => {
+    // Only open details if user didn't perform a horizontal swipe
+    if (dragDistance.current < 10) {
+      onOpenDetails(product);
+    }
+  };
+
   return (
     <div
-      onClick={() => onOpenDetails(product)}
+      onClick={handleCardClick}
       className="group relative bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-xl dark:hover:shadow-rose-950/20 hover:border-rose-200 dark:hover:border-rose-800/80 transition-all duration-300 flex flex-col overflow-hidden cursor-pointer"
     >
-      {/* Top Image area with pagination dots (o o o) */}
+      {/* Top Image area with horizontal scroll & swipe (o o o) */}
       <div className="relative aspect-square w-full overflow-hidden bg-slate-100 dark:bg-slate-800 select-none">
-        <img
-          src={images[activeImageIndex]}
-          alt={product.name}
-          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
-          loading="lazy"
-        />
+        
+        {/* Horizontal scrollable image carousel */}
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          className="w-full h-full flex overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+          {images.map((img, idx) => (
+            <div
+              key={idx}
+              className="w-full h-full shrink-0 snap-center relative"
+            >
+              <img
+                src={img}
+                alt={`${product.name} ${idx + 1}`}
+                className="w-full h-full object-cover object-center group-hover:scale-103 transition-transform duration-500 ease-out pointer-events-none"
+                loading="lazy"
+              />
+            </div>
+          ))}
+        </div>
 
         {/* Gradient overlay on bottom of image for contrast */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10 pointer-events-none" />
 
         {/* Badges: e.g. -20% or Xit savdo */}
-        <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
+        <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10 pointer-events-none">
           {product.badge && (
             <span className="px-2.5 py-1 rounded-full bg-rose-600/90 backdrop-blur-xs text-white text-[10px] font-black tracking-wide uppercase shadow-xs">
               {product.badge}
@@ -89,20 +146,20 @@ export default function ProductCard({
           />
         </button>
 
-        {/* Image Arrows if multiple images */}
+        {/* Image Arrows for desktop hover */}
         {images.length > 1 && (
           <>
             <button
               onClick={handlePrevImage}
               aria-label="Oldingi rasm"
-              className="absolute left-1.5 top-1/2 -translate-y-1/2 p-1 rounded-full bg-white/70 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 opacity-0 group-hover:opacity-100 transition shadow-xs z-10"
+              className="absolute left-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 opacity-0 group-hover:opacity-100 transition shadow-md z-10"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={handleNextImage}
               aria-label="Keyingi rasm"
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded-full bg-white/70 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 opacity-0 group-hover:opacity-100 transition shadow-xs z-10"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 opacity-0 group-hover:opacity-100 transition shadow-md z-10"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -111,11 +168,11 @@ export default function ProductCard({
 
         {/* Pagination Dots (o o o) matching wireframe */}
         {images.length > 1 && (
-          <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10 bg-black/40 backdrop-blur-xs px-2.5 py-1 rounded-full">
+          <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10 bg-black/40 backdrop-blur-xs px-2.5 py-1 rounded-full pointer-events-auto">
             {images.map((_, idx) => (
               <button
                 key={idx}
-                onClick={(e) => handleDotClick(e, idx)}
+                onClick={(e) => scrollToImage(e, idx)}
                 aria-label={`Rasm ${idx + 1}`}
                 className={`transition-all rounded-full ${
                   activeImageIndex === idx

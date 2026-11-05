@@ -1,5 +1,5 @@
-import React from 'react';
-import { Gift, Send, Phone, Clock, MapPin, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { Gift, Send, Phone, Clock, MapPin } from 'lucide-react';
 
 const InstagramIcon = ({ className = "w-4 h-4" }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -10,6 +10,18 @@ const InstagramIcon = ({ className = "w-4 h-4" }) => (
 );
 
 export default function Footer({ settings, onOpenAdmin, categories, onSelectCategory }) {
+  const [clickCount, setClickCount] = useState(0);
+
+  const handleSecretTrigger = () => {
+    const next = clickCount + 1;
+    setClickCount(next);
+    if (next >= 4) {
+      setClickCount(0);
+      if (onOpenAdmin) onOpenAdmin();
+    }
+    setTimeout(() => setClickCount(0), 1500);
+  };
+
   return (
     <footer className="mt-16 sm:mt-24 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 pb-20 sm:pb-0 transition-colors">
       {/* Top Banner Feature Bar */}
@@ -27,8 +39,8 @@ export default function Footer({ settings, onOpenAdmin, categories, onSelectCate
           </div>
           <div className="p-3">
             <div className="text-2xl mb-1">💌</div>
-            <h5 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-200">Maxsus Tabriknoma</h5>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">Iliq so'zlaringizni qo'lda yozamiz</p>
+            <h5 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-200">Eksklyuziv Dizayn</h5>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">Unutilmas taassurot kafolati</p>
           </div>
           <div className="p-3">
             <div className="text-2xl mb-1">💬</div>
@@ -58,7 +70,7 @@ export default function Footer({ settings, onOpenAdmin, categories, onSelectCate
             <div className="pt-2 flex items-center gap-3">
               {settings?.instagram && (
                 <a
-                  href={`https://instagram.com/${settings.instagram.replace('@', '')}`}
+                  href={`https://instagram.com/${settings.instagram.replace(/^@+/, '')}`}
                   target="_blank"
                   rel="noreferrer"
                   className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-slate-700 hover:text-rose-600 dark:hover:text-rose-400 flex items-center justify-center text-slate-700 dark:text-slate-200 transition"
@@ -69,7 +81,7 @@ export default function Footer({ settings, onOpenAdmin, categories, onSelectCate
               )}
               {settings?.telegramManager && (
                 <a
-                  href={`https://t.me/${settings.telegramManager.replace('@', '')}`}
+                  href={`https://t.me/${settings.telegramManager.replace(/^@+/, '')}`}
                   target="_blank"
                   rel="noreferrer"
                   className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-slate-700 hover:text-sky-600 dark:hover:text-sky-400 flex items-center justify-center text-slate-700 dark:text-slate-200 transition"
@@ -123,7 +135,7 @@ export default function Footer({ settings, onOpenAdmin, categories, onSelectCate
             </div>
             <div className="flex items-center gap-2">
               <Send className="w-4 h-4 text-sky-500 shrink-0" />
-              <span>@{settings?.telegramManager?.replace('@', '') || "sharbox_manager"}</span>
+              <span>@{settings?.telegramManager?.replace(/^@+/, '') || "sharbox_manager"}</span>
             </div>
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-emerald-500 shrink-0" />
@@ -136,18 +148,18 @@ export default function Footer({ settings, onOpenAdmin, categories, onSelectCate
           </div>
         </div>
 
-        {/* Bottom copyright and admin link */}
+        {/* Bottom copyright (clean, no public admin button) */}
         <div className="mt-10 pt-6 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
-          <p>© {new Date().getFullYear()} sharbox.uz — Barcha huquqlar himoyalangan.</p>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={onOpenAdmin}
-              className="inline-flex items-center gap-1.5 text-slate-400 hover:text-slate-800 dark:hover:text-white transition"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Admin sahifa</span>
-            </button>
-          </div>
+          <p
+            onClick={handleSecretTrigger}
+            className="select-none cursor-default"
+            title="sharbox.uz"
+          >
+            © {new Date().getFullYear()} sharbox.uz — Barcha huquqlar himoyalangan.
+          </p>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">
+            Qo'l mehnati sovg'a bokslari va sharlar
+          </p>
         </div>
       </div>
     </footer>

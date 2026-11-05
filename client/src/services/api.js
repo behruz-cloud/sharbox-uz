@@ -79,12 +79,6 @@ export const api = {
     return res.json();
   },
 
-  // Extras
-  async getExtras() {
-    const res = await fetch(`${API_BASE}/extras`);
-    return res.json();
-  },
-
   // Settings
   async getSettings() {
     const res = await fetch(`${API_BASE}/settings`);
@@ -94,7 +88,10 @@ export const api = {
   async updateSettings(settings, adminPin) {
     const res = await fetch(`${API_BASE}/settings`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(adminPin ? { 'x-admin-pin': adminPin } : {})
+      },
       body: JSON.stringify({ settings, adminPin })
     });
     return res.json();
@@ -106,6 +103,14 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pin })
+    });
+    return res.json();
+  },
+
+  // Analytics & Reports
+  async getAnalytics(adminPin) {
+    const res = await fetch(`${API_BASE}/analytics`, {
+      headers: adminPin ? { 'x-admin-pin': adminPin } : {}
     });
     return res.json();
   },

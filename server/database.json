@@ -47,35 +47,6 @@
       "active": true
     }
   ],
-  "extras": [
-    {
-      "id": "ex-card",
-      "name": "Tabriknomaga samimiy yozuv yozish",
-      "price": 0,
-      "requiredText": true,
-      "placeholder": "Tabriknomaga yoziladigan matn..."
-    },
-    {
-      "id": "ex-heliumballoons",
-      "name": "5 dona rang-barang geliy sharlar",
-      "price": 35000
-    },
-    {
-      "id": "ex-heartballoon",
-      "name": "Katta foliyali yurakcha shari",
-      "price": 25000
-    },
-    {
-      "id": "ex-sweets",
-      "name": "Qo'shimcha Kinder / Raffaello shirinliklari",
-      "price": 40000
-    },
-    {
-      "id": "ex-anon",
-      "name": "Anonim syurpriz (yetkazuvchi sizning ismingizni sir tutadi)",
-      "price": 0
-    }
-  ],
   "products": [
     {
       "id": "sb-1",
@@ -306,6 +277,35 @@
       "totalAmount": 290000,
       "status": "Yangi",
       "createdAt": "2026-10-15T16:12:02.809Z"
+    }
+  ],
+  "extras": [
+    {
+      "id": "ex-card",
+      "name": "Tabriknomaga samimiy yozuv yozish",
+      "price": 0,
+      "requiredText": true,
+      "placeholder": "Tabriknomaga yoziladigan matn..."
+    },
+    {
+      "id": "ex-heliumballoons",
+      "name": "5 dona rang-barang geliy sharlar",
+      "price": 35000
+    },
+    {
+      "id": "ex-heartballoon",
+      "name": "Katta foliyali yurakcha shari",
+      "price": 25000
+    },
+    {
+      "id": "ex-sweets",
+      "name": "Qo'shimcha Kinder / Raffaello shirinliklari",
+      "price": 40000
+    },
+    {
+      "id": "ex-anon",
+      "name": "Anonim syurpriz (yetkazuvchi sizning ismingizni sir tutadi)",
+      "price": 0
     }
   ]
 }

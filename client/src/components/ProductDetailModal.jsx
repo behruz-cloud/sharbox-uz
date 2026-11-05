@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { X, Heart, ShoppingBag, Send, CheckCircle2, PackageCheck, ChevronLeft, ChevronRight, ShieldCheck, Truck } from 'lucide-react';
 
 export default function ProductDetailModal({
@@ -19,6 +19,33 @@ export default function ProductDetailModal({
   const [quantity, setQuantity] = useState(1);
   const [addedAnimation, setAddedAnimation] = useState(false);
 
+  // Touch swipe support
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
+
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    const diff = touchStartX.current - touchEndX.current;
+    if (Math.abs(diff) > 40) {
+      if (diff > 0 && selectedImage < images.length - 1) {
+        // Swiped left -> next image
+        setSelectedImage(prev => prev + 1);
+      } else if (diff < 0 && selectedImage > 0) {
+        // Swiped right -> prev image
+        setSelectedImage(prev => prev - 1);
+      }
+    }
+    touchStartX.current = 0;
+    touchEndX.current = 0;
+  };
+
   const discountAmount = product.oldPrice && product.oldPrice > product.price
     ? product.oldPrice - product.price
     : null;
@@ -33,7 +60,7 @@ export default function ProductDetailModal({
   };
 
   const handleDirectTelegram = () => {
-    const manager = settings?.telegramManager ? settings.telegramManager.replace('@', '') : 'sharbox_manager';
+    const manager = settings?.telegramManager ? settings.telegramManager.replace(/^@+/, '') : 'sharbox_manager';
     const text = `Assalomu alaykum! "sharbox.uz" saytidan ko'rdim:\n📦 Mahsulot: ${product.name}\n💰 Narxi: ${product.price.toLocaleString('uz-UZ')} so'm\n\nUshbu boks haqida to'liqroq ma'lumot olmoqchi edim va buyurtma berishni istayman.`;
     window.open(`https://t.me/${manager}?text=${encodeURIComponent(text)}`, '_blank');
   };
@@ -49,14 +76,14 @@ export default function ProductDetailModal({
           <button
             onClick={() => onToggleFavorite(product)}
             aria-label="Sevimlilar"
-            className="p-2.5 rounded-full bg-white/90 dark:bg-slate-800/90 hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-rose-600 dark:hover:text-rose-400 shadow-md transition"
+            className="p-2.5 rounded-full bg-white/90 dark:bg-slate-800/90 hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-rose-600 dark:hover:text-rose-400 shadow-md transition cursor-pointer"
           >
             <Heart className={`w-5 h-5 ${isFavorite ? 'text-rose-600 fill-rose-600' : ''}`} />
           </button>
           <button
             onClick={onClose}
             aria-label="Yopish"
-            className="p-2.5 rounded-full bg-white/90 dark:bg-slate-800/90 hover:bg-white dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white shadow-md transition"
+            className="p-2.5 rounded-full bg-white/90 dark:bg-slate-800/90 hover:bg-white dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white shadow-md transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -65,28 +92,53 @@ export default function ProductDetailModal({
         {/* Scrollable Body */}
         <div className="overflow-y-auto p-4 sm:p-6 space-y-6">
           
-          {/* Image Gallery */}
-          <div className="space-y-3">
-            <div className="relative aspect-4/3 sm:aspect-16/10 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 select-none shadow-inner">
-              <img
-                src={images[selectedImage]}
-                alt={product.name}
-                className="w-full h-full object-cover"
-              />
+          {/* Smooth Motion Image Gallery with Touch Swipe */}
+          <div className="space-y-3 select-none">
+            <div
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              className="relative aspect-4/3 sm:aspect-16/10 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 shadow-inner group"
+            >
+              {/* Animated sliding container */}
+              <div
+                className="flex transition-transform duration-300 ease-out h-full"
+                style={{ transform: `translateX(-${selectedImage * 100}%)` }}
+              >
+                {images.map((img, i) => (
+                  <div key={i} className="w-full h-full shrink-0 relative">
+                    <img
+                      src={img}
+                      alt={`${product.name} ${i + 1}`}
+                      className="w-full h-full object-cover select-none pointer-events-none"
+                    />
+                  </div>
+                ))}
+              </div>
 
+              {/* Image Counter Badge */}
+              {images.length > 1 && (
+                <div className="absolute bottom-3 right-3 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-xs font-bold tracking-wider z-10">
+                  {selectedImage + 1} / {images.length}
+                </div>
+              )}
+
+              {/* Arrow controls */}
               {images.length > 1 && (
                 <>
                   <button
-                    onClick={() => setSelectedImage((prev) => (prev - 1 + images.length) % images.length)}
+                    onClick={() => setSelectedImage((prev) => Math.max(0, prev - 1))}
+                    disabled={selectedImage === 0}
                     aria-label="Oldingi rasm"
-                    className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 shadow-md"
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/85 dark:bg-slate-800/85 hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 shadow-lg transition opacity-0 group-hover:opacity-100 disabled:opacity-20 cursor-pointer z-10"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
                   <button
-                    onClick={() => setSelectedImage((prev) => (prev + 1) % images.length)}
+                    onClick={() => setSelectedImage((prev) => Math.min(images.length - 1, prev + 1))}
+                    disabled={selectedImage === images.length - 1}
                     aria-label="Keyingi rasm"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 shadow-md"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/85 dark:bg-slate-800/85 hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 shadow-lg transition opacity-0 group-hover:opacity-100 disabled:opacity-20 cursor-pointer z-10"
                   >
                     <ChevronRight className="w-5 h-5" />
                   </button>
@@ -94,23 +146,23 @@ export default function ProductDetailModal({
               )}
 
               {product.badge && (
-                <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-rose-600 text-white text-xs font-black uppercase tracking-wider shadow-md">
+                <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-rose-600 text-white text-xs font-black uppercase tracking-wider shadow-md z-10">
                   {product.badge}
                 </span>
               )}
             </div>
 
-            {/* Thumbnails */}
+            {/* Interactive Thumbnails */}
             {images.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+              <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar pt-1">
                 {images.map((img, i) => (
                   <button
                     key={i}
                     onClick={() => setSelectedImage(i)}
-                    className={`relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 border-2 transition ${
+                    className={`relative w-16 h-16 rounded-xl overflow-hidden shrink-0 border-2 transition-all duration-200 cursor-pointer ${
                       selectedImage === i
-                        ? 'border-rose-600 scale-102 shadow-xs'
-                        : 'border-slate-200 dark:border-slate-700 opacity-70 hover:opacity-100'
+                        ? 'border-rose-600 ring-2 ring-rose-300 dark:ring-rose-800 scale-105 shadow-md'
+                        : 'border-slate-200 dark:border-slate-700 opacity-60 hover:opacity-100'
                     }`}
                   >
                     <img src={img} alt="" className="w-full h-full object-cover" />
@@ -157,7 +209,7 @@ export default function ProductDetailModal({
                 {product.contents.map((item, idx) => (
                   <div
                     key={idx}
-                    className="flex items-start gap-2 text-xs sm:text-sm text-slate-700 dark:text-slate-200 font-medium bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700"
+                    className="flex items-start gap-2 text-xs sm:text-sm text-slate-700 dark:text-slate-200 font-medium bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700 shadow-xs"
                   >
                     <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                     <span>{item}</span>
@@ -201,7 +253,7 @@ export default function ProductDetailModal({
             <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-2xl bg-slate-50 dark:bg-slate-800 p-1">
               <button
                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                className="w-8 h-8 rounded-xl bg-white dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center transition"
+                className="w-8 h-8 rounded-xl bg-white dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center transition cursor-pointer"
               >
                 -
               </button>
@@ -210,7 +262,7 @@ export default function ProductDetailModal({
               </span>
               <button
                 onClick={() => setQuantity((q) => q + 1)}
-                className="w-8 h-8 rounded-xl bg-white dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center transition"
+                className="w-8 h-8 rounded-xl bg-white dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center transition cursor-pointer"
               >
                 +
               </button>

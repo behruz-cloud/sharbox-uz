@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 
 const DB_FILE = path.join(__dirname, 'database.json');
+const BACKUP_FILE = path.join(__dirname, 'database.backup.json');
+const ARCHIVE_FILE = path.join(__dirname, 'orders_archive.jsonl');
 
 const defaultData = {
   settings: {
@@ -33,13 +35,6 @@ const defaultData = {
       ctaText: "Mahsulotlarni ko'rish",
       active: true
     }
-  ],
-  extras: [
-    { id: "ex-card", name: "Tabriknomaga samimiy yozuv yozish", price: 0, requiredText: true, placeholder: "Tabriknomaga yoziladigan matn..." },
-    { id: "ex-heliumballoons", name: "5 dona rang-barang geliy sharlar", price: 35000 },
-    { id: "ex-heartballoon", name: "Katta foliyali yurakcha shari", price: 25000 },
-    { id: "ex-sweets", name: "Qo'shimcha Kinder / Raffaello shirinliklari", price: 40000 },
-    { id: "ex-anon", name: "Anonim syurpriz (yetkazuvchi sizning ismingizni sir tutadi)", price: 0 }
   ],
   products: [
     {
@@ -177,28 +172,118 @@ const defaultData = {
   orders: []
 };
 
-function readDb() {
-  if (!fs.existsSync(DB_FILE)) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(defaultData, null, 2), 'utf-8');
-    return defaultData;
-  }
+// Reconcile orders from immutable archive if any are missing
+function reconcileOrdersFromArchive(orders) {
+  if (!fs.existsSync(ARCHIVE_FILE)) return orders;
   try {
-    const raw = fs.readFileSync(DB_FILE, 'utf-8');
-    const data = JSON.parse(raw);
-    return { ...defaultData, ...data };
+    const raw = fs.readFileSync(ARCHIVE_FILE, 'utf-8');
+    const lines = raw.split('\n').filter(Boolean);
+    const existingIds = new Set((orders || []).map(o => o.id));
+    const merged = [...(orders || [])];
+
+    lines.forEach(line => {
+      try {
+        const order = JSON.parse(line);
+        if (order && order.id && !existingIds.has(order.id)) {
+          merged.push(order);
+          existingIds.add(order.id);
+        }
+      } catch (e) {}
+    });
+
+    // Sort newest first
+    merged.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    return merged;
   } catch (err) {
-    console.error('Error reading db, using defaults:', err);
-    return defaultData;
+    console.error('Error reconciling archive orders:', err);
+    return orders;
   }
 }
 
+function readDb() {
+  let data = null;
+
+  // Try reading primary DB
+  if (fs.existsSync(DB_FILE)) {
+    try {
+      const raw = fs.readFileSync(DB_FILE, 'utf-8');
+      data = JSON.parse(raw);
+    } catch (err) {
+      console.error('Warning: primary DB corrupt or unreadable, trying backup...', err.message);
+    }
+  }
+
+  // Fallback to backup if primary failed or does not exist
+  if (!data && fs.existsSync(BACKUP_FILE)) {
+    try {
+      const raw = fs.readFileSync(BACKUP_FILE, 'utf-8');
+      data = JSON.parse(raw);
+      console.log('Restored database from backup file.');
+    } catch (err) {
+      console.error('Error reading backup file:', err.message);
+    }
+  }
+
+  // Fallback to default
+  if (!data) {
+    data = defaultData;
+    writeDb(data);
+    return data;
+  }
+
+  // Deep-merge settings
+  const mergedSettings = { ...defaultData.settings, ...(data.settings || {}) };
+  const merged = {
+    ...defaultData,
+    ...data,
+    settings: mergedSettings,
+    categories: Array.isArray(data.categories) && data.categories.length ? data.categories : defaultData.categories,
+    products: Array.isArray(data.products) && data.products.length ? data.products : defaultData.products,
+    banners: Array.isArray(data.banners) && data.banners.length ? data.banners : defaultData.banners,
+    orders: reconcileOrdersFromArchive(data.orders || [])
+  };
+
+  return merged;
+}
+
 function writeDb(data) {
-  const tmpFile = `${DB_FILE}.tmp`;
-  fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2), 'utf-8');
-  fs.renameSync(tmpFile, DB_FILE);
+  try {
+    const content = JSON.stringify(data, null, 2);
+    const tmpFile = `${DB_FILE}.${Date.now()}-${Math.random().toString(36).substring(7)}.tmp`;
+
+    // 1. Write to temp file and sync to disk
+    const fd = fs.openSync(tmpFile, 'w');
+    fs.writeSync(fd, content, 0, 'utf-8');
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+
+    // 2. Atomic rename to primary DB
+    fs.renameSync(tmpFile, DB_FILE);
+
+    // 3. Keep backup copy updated
+    try {
+      fs.writeFileSync(BACKUP_FILE, content, 'utf-8');
+    } catch (bErr) {
+      // Non-fatal
+    }
+  } catch (err) {
+    console.error('CRITICAL: writeDb failed:', err);
+    throw err;
+  }
+}
+
+// Immutable append-only log for every single order placed
+function archiveOrder(order) {
+  try {
+    const line = JSON.stringify(order) + '\n';
+    fs.appendFileSync(ARCHIVE_FILE, line, 'utf-8');
+  } catch (err) {
+    console.error('Error writing to order archive:', err);
+  }
 }
 
 module.exports = {
   readDb,
-  writeDb
+  writeDb,
+  archiveOrder
 };
